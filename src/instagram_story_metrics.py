@@ -12,7 +12,6 @@ import sys
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 from functools import lru_cache
-import urllib.parse
 
 import polars as pl
 import pytz
