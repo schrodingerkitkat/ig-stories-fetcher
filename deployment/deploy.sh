@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 PROJECT_ID="cobalt-door-450002-c0"
 REGION="us-central1"
 FUNCTION_NAME="ig-story-metrics-fetcher"
-SERVICE_ACCOUNT="ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+SERVICE_ACCOUNT="ig-metrics-fetcher@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Parse arguments
 ENVIRONMENT=${1:-staging}

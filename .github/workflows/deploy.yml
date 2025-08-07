@@ -82,7 +82,7 @@ jobs:
             --entry-point=fetch_instagram_story_metrics_batch \
             --memory=512MB \
             --timeout=540s \
-            --service-account=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --service-account=ig-metrics-fetcher@${PROJECT_ID}.iam.gserviceaccount.com \
             --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCS_BUCKET=chapala-bronze-bucket,LOG_LEVEL=INFO,DATA_WINDOW_DAYS=1" \
             --trigger-http \
             --allow-unauthenticated \
@@ -107,7 +107,7 @@ jobs:
             --http-method=POST \
             --headers="Content-Type=application/json" \
             --message-body='{"accounts":["NPI","LT","MD","RE","SML"]}' \
-            --oidc-service-account-email=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --oidc-service-account-email=ig-metrics-fetcher@${PROJECT_ID}.iam.gserviceaccount.com \
             --time-zone="America/Los_Angeles" \
             --attempt-deadline="540s" \
             --max-retry-attempts=3
@@ -153,7 +153,7 @@ jobs:
             --entry-point=fetch_instagram_story_metrics_batch \
             --memory=512MB \
             --timeout=540s \
-            --service-account=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --service-account=ig-metrics-fetcher@${PROJECT_ID}.iam.gserviceaccount.com \
             --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCS_BUCKET=chapala-bronze-bucket,LOG_LEVEL=INFO,DATA_WINDOW_DAYS=1" \
             --trigger-http \
             --allow-unauthenticated \
@@ -178,7 +178,7 @@ jobs:
             --http-method=POST \
             --headers="Content-Type=application/json" \
             --message-body='{"accounts":["NPI","LT","MD","RE","SML"]}' \
-            --oidc-service-account-email=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --oidc-service-account-email=ig-metrics-fetcher@${PROJECT_ID}.iam.gserviceaccount.com \
             --time-zone="America/Los_Angeles" \
             --attempt-deadline="540s" \
             --max-retry-attempts=3
