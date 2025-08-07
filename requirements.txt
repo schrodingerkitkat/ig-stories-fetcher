@@ -1,0 +1,13 @@
+polars>=0.20.0
+pytz>=2023.3
+requests>=2.31.0
+google-cloud-storage>=2.10.0
+google-cloud-secret-manager>=2.16.0
+pandera>=0.18.0
+
+# Dev dependencies (optional - for local development)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+ruff>=0.1.0
+black>=23.0.0
+mypy>=1.5.0

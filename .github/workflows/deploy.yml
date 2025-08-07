@@ -1,0 +1,197 @@
+name: Deploy Instagram Story Metrics Fetcher
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  PROJECT_ID: cobalt-door-450002-c0
+  REGION: us-central1
+  SERVICE_NAME: ig-story-metrics-fetcher
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run linting
+        run: |
+          ruff check src/
+
+      - name: Run type checking
+        run: |
+          mypy src/ --ignore-missing-imports
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=src --cov-report=term-missing
+
+  deploy-staging:
+    needs: test
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Cloud Function (Staging)
+        run: |
+          gcloud functions deploy ${SERVICE_NAME}-staging \
+            --gen2 \
+            --runtime=python311 \
+            --region=$REGION \
+            --source=. \
+            --entry-point=fetch_instagram_story_metrics_batch \
+            --memory=512MB \
+            --timeout=540s \
+            --service-account=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCS_BUCKET=chapala-bronze-bucket,LOG_LEVEL=INFO,DATA_WINDOW_DAYS=1" \
+            --trigger-http \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --min-instances=0
+
+      - name: Set up Cloud Scheduler (Staging)
+        run: |
+          # Get function URL
+          FUNCTION_URL=$(gcloud functions describe ${SERVICE_NAME}-staging --region=$REGION --format="value(url)")
+          
+          # Delete existing scheduler if it exists
+          gcloud scheduler jobs delete ig-story-metrics-scheduler-staging \
+            --location=$REGION \
+            --quiet || true
+          
+          # Create scheduler job (every 2 hours for staging)
+          gcloud scheduler jobs create http ig-story-metrics-scheduler-staging \
+            --location=$REGION \
+            --schedule="0 */2 * * *" \
+            --uri="${FUNCTION_URL}" \
+            --http-method=POST \
+            --headers="Content-Type=application/json" \
+            --message-body='{"accounts":["NPI","LT","MD","RE","SML"]}' \
+            --oidc-service-account-email=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --time-zone="America/Los_Angeles" \
+            --attempt-deadline="540s" \
+            --max-retry-attempts=3
+
+      - name: Test deployment
+        run: |
+          FUNCTION_URL=$(gcloud functions describe ${SERVICE_NAME}-staging --region=$REGION --format="value(url)")
+          echo "Testing function at: $FUNCTION_URL"
+          
+          # Test with single account
+          curl -X POST $FUNCTION_URL \
+            -H "Content-Type: application/json" \
+            -d '{"accounts":["NPI"]}' \
+            --max-time 30 || true
+
+  deploy-production:
+    needs: test
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Cloud Function (Production)
+        run: |
+          gcloud functions deploy ${SERVICE_NAME}-prod \
+            --gen2 \
+            --runtime=python311 \
+            --region=$REGION \
+            --source=. \
+            --entry-point=fetch_instagram_story_metrics_batch \
+            --memory=512MB \
+            --timeout=540s \
+            --service-account=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GCS_BUCKET=chapala-bronze-bucket,LOG_LEVEL=INFO,DATA_WINDOW_DAYS=1" \
+            --trigger-http \
+            --allow-unauthenticated \
+            --max-instances=10 \
+            --min-instances=0
+
+      - name: Set up Cloud Scheduler (Production)
+        run: |
+          # Get function URL
+          FUNCTION_URL=$(gcloud functions describe ${SERVICE_NAME}-prod --region=$REGION --format="value(url)")
+          
+          # Delete existing scheduler if it exists
+          gcloud scheduler jobs delete ig-story-metrics-scheduler-prod \
+            --location=$REGION \
+            --quiet || true
+          
+          # Create scheduler job (every hour for production)
+          gcloud scheduler jobs create http ig-story-metrics-scheduler-prod \
+            --location=$REGION \
+            --schedule="0 * * * *" \
+            --uri="${FUNCTION_URL}" \
+            --http-method=POST \
+            --headers="Content-Type=application/json" \
+            --message-body='{"accounts":["NPI","LT","MD","RE","SML"]}' \
+            --oidc-service-account-email=ig-metrics-sa@${PROJECT_ID}.iam.gserviceaccount.com \
+            --time-zone="America/Los_Angeles" \
+            --attempt-deadline="540s" \
+            --max-retry-attempts=3
+
+      - name: Verify deployment
+        run: |
+          echo "Production deployment complete!"
+          echo "Function: ${SERVICE_NAME}-prod"
+          echo "Scheduler: ig-story-metrics-scheduler-prod"
+          echo "Schedule: Every hour"
+          
+          # List recent executions
+          gcloud functions logs read ${SERVICE_NAME}-prod \
+            --region=$REGION \
+            --limit=5 \
+            --format="table(time,level,text)" || true
